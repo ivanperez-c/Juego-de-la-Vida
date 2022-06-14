@@ -1,0 +1,379 @@
+<!-- Autores de la práctica -->
+<!-- David Pozo Sánchez-->
+<!-- Iván Pérez Ciruelos -->
+
+<html>
+<head>
+	<!-- Asignamos un icono a la página -->
+    <link rel="shortcut icon" href="urjc.png" type="image/x-icon">
+	
+	<!-- Ponemos un nombre a la página -->
+	<title>Juego de la vida</title>
+	
+	<script type="text/javascript">
+		var tamaño = 40; //Variable para cambiar el tamaño de la cuadrícula
+		function run() {  //Comenzamos el juego de la vida
+			juegoDeLaVida.inicio = new juegoDeLaVida.claseMundo(tamaño);//Iniciamos la cuadrícula
+			juegoDeLaVida.estado = new juegoDeLaVida.claseEscena(juegoDeLaVida.inicio, [new juegoDeLaVida.interaccionPantalla()]);
+			juegoDeLaVida.estado.on();
+		}
+		
+	</script>
+	
+	<style>
+	body {
+		background-color: #C4FFFE;
+		font-family: Copperplate / Copperplate Gothic Light, sans-serif;
+		font-size: 23;
+		color: #333;
+	}
+
+	fieldset {
+		margin: 15px 0 0 0;
+		padding: 1;
+		border: 0;
+	}
+
+	input {
+		margin: 3px 5px;
+	}
+
+	.buttons input {
+		border-radius: 13px;
+		background-color: #A8AEFF;
+		padding: 5px;
+	}
+
+	#Renderizado {
+		float: left;
+		line-height: 5px;
+		border: 4px solid #A8AEFF;
+		padding: 7px;
+	}
+
+	#Renderizado a, #Renderizado a:visited {
+		float: left;
+		cursor: crosshair;
+	}
+
+	#Renderizado a.cell {
+		width: 11px;
+		height: 11px;
+		line-height: 0;
+		margin: 1px 1.5px 1.5px 1px;
+	}
+
+	#Renderizado a.vivas {
+		background-color: #00126F;
+	}
+
+	#Renderizado a.muertas {
+		background-color: #b0b0b0;
+	}
+    </style>
+</head>
+
+<body class="lab" onload="run();">
+
+	<!-- Identificación de la práctica -->
+	<p> Práctica 2: El juego de la vida </p>
+	<p> Autores de la práctica: Iván Pérez Ciruelos y David Pozo Sánchez  </p>
+	
+	<div id="Renderizado" class="clearfix"></div>
+
+		<fieldset> <!-- Ponemos los botones -->
+			<div class="buttons">
+				<input type="button" name="siguiente" value="Siguiente paso" onclick="juegoDeLaVida.estado.paso()" /> <br/> 
+				<input type="button" name="automatico" value="Automatico" onclick="juegoDeLaVida.estado.play()" /> <br/> 
+				<input type="button" name="parar" value="Parar" onclick="juegoDeLaVida.estado.parar()" /> <br/> 
+				<input type="button" name="random" value="Random" onclick="juegoDeLaVida.estado.parar(); juegoDeLaVida.random(juegoDeLaVida.inicio); juegoDeLaVida.estado.paso()" /> <br/> 
+				<input type="button" name="parpadeador" value="Parpadeador" onclick="juegoDeLaVida.estado.parar(); juegoDeLaVida.parpadeador(juegoDeLaVida.inicio); juegoDeLaVida.estado.paso()" /> <br/> 
+				<input type="button" name="barco" value="Barco" onclick="juegoDeLaVida.estado.parar(); juegoDeLaVida.barco(juegoDeLaVida.inicio); juegoDeLaVida.estado.paso()" /> <br/> 
+				<input type="button" name="planeador" value="Planeador" onclick="juegoDeLaVida.estado.parar(); juegoDeLaVida.planeador(juegoDeLaVida.inicio); juegoDeLaVida.estado.paso()" /> <br/> 
+				<input type="button" name="limpiar" value="Limpiar" onclick="juegoDeLaVida.estado.parar(); juegoDeLaVida.limpiar(juegoDeLaVida.inicio); juegoDeLaVida.estado.paso()" /> <br/> 
+			
+			</div>
+		</fieldset>	
+		
+	<div>
+	  <canvas style="background-color: white;" id="lienzo" width="200" height="100"></canvas>
+	</div>
+	
+		<script>	
+	window.juegoDeLaVida = {};
+
+	var contextoTexto = document.getElementById('lienzo').getContext('2d');
+	
+	//Clase célula
+	juegoDeLaVida.claseCelula = function () {
+	
+		var futuro, celula;
+
+		celula = { //Definición del objeto célula
+			vivas : false,  //Iniciamos todas las células muertas
+		
+			cerca : function () { celula.vivas = !celula.vivas; }, //Cambiamos el estado de las células para su movimiento
+		
+			celulasVecinas : [],
+		
+			vecinosConVida : function () { //Función para saber el número de células vecinas con vida
+				var contadorVecinosVivos = 0;
+				celula.celulasVecinas.forEach(function (vecina) {
+					contadorVecinosVivos += vecina.vivas;
+				});
+				return contadorVecinosVivos;
+			}, //Fin función vecinosConVida
+		
+			avance : function () { //Función para controlar el avance de las células
+				if (futuro === undefined) {
+					celula.estadoFuturo();
+				}
+				celula.vivas = futuro;
+				futuro = undefined;
+			}, //Fin función avance
+		
+			estadoFuturo : function () { //Función para el estado de la célula en el siguiente paso
+				if (futuro === undefined) {
+					var vecinosConVida = celula.vecinosConVida();
+					futuro = vecinosConVida === 3 || (celula.vivas && vecinosConVida === 2);
+				}
+				return futuro;
+			} //Fin función estadoFuturo
+
+		}; //Fin celula
+	
+		return celula;
+	};
+
+	//Clase mundo
+	juegoDeLaVida.claseMundo = function (size) {
+		var mundo;
+
+		mundo = { //Definición del objeto mundo
+			celdas : [], 
+		
+			cerca : function (x, y) { 
+				mundo.celdas[x][y].cerca();
+			},
+		
+			avance : function () {
+				for (var i = 0; i < mundo.celdas.length; i++) {
+					for (var j = 0; j < mundo.celdas[i].length; j++) {
+						mundo.celdas[i][j].estadoFuturo();
+					}
+				}
+				for (var i = 0; i < mundo.celdas.length; i++) {
+					for (var j = 0; j < mundo.celdas[i].length; j++) {
+						mundo.celdas[i][j].avance();
+					}
+				}
+			}
+		};
+
+		function indiceCorrecto(p) {
+			if (p<0){
+				return size-1;
+			}else if (p > size - 1){
+				return 0;
+			}else{
+				return p;
+			}
+		}
+	
+		function indicesVecinos(p) {
+			return [indiceCorrecto(p - 1), p, indiceCorrecto(p + 1)];
+		}
+
+		for (var i = 0; i < size; i++) {
+			mundo.celdas[i] = [];
+			for (var j = 0; j < size; j++) {
+				mundo.celdas[i][j] = new juegoDeLaVida.claseCelula();
+			}
+		}
+	
+		function asignarVecinos() {
+			var indicesX, indicesY;
+			for (var i = 0; i < size; i++) {
+				for (var j = 0; j < size; j++) {
+					indicesX = indicesVecinos(i);
+					indicesY = indicesVecinos(j);
+					for (var k = 0; k < indicesX.length; k++) {
+						for (var l = 0; l < indicesY.length; l++) {
+							mundo.celdas[i][j].celulasVecinas.push(mundo.celdas[indicesX[k]][indicesY[l]]);
+						}
+					}
+					mundo.celdas[i][j].celulasVecinas.splice(4, 1);
+				}
+			}
+		}
+		asignarVecinos();
+	
+		return mundo;
+	};
+
+	//Clase para juego aleatorio
+	juegoDeLaVida.random = function (claseMundo) {
+		for (var i = 0; i < claseMundo.celdas.length; i++) {
+			for (var j = 0; j < claseMundo.celdas.length; j++) {
+				claseMundo.celdas[i][j].vivas = (Math.random() > 0.5);
+			}	
+		}
+	};
+
+	//Clase para generar un parpadeador
+	juegoDeLaVida.parpadeador = function (claseMundo){
+		claseMundo.celdas[10][10].vivas = true;
+		claseMundo.celdas[10][11].vivas = true;
+		claseMundo.celdas[10][12].vivas = true;
+	};
+
+	//Clase para generar un barco
+	juegoDeLaVida.barco = function (claseMundo){
+		claseMundo.celdas[15][15].vivas = true;
+		claseMundo.celdas[16][15].vivas = true;
+		claseMundo.celdas[15][16].vivas = true;
+		claseMundo.celdas[17][16].vivas = true;
+		claseMundo.celdas[16][17].vivas = true;
+	};
+
+	//Clase para generar un planeador
+	juegoDeLaVida.planeador = function (claseMundo){
+		claseMundo.celdas[20][20].vivas = true;
+		claseMundo.celdas[20][21].vivas = true;
+		claseMundo.celdas[19][21].vivas = true;
+		claseMundo.celdas[19][22].vivas = true;
+		claseMundo.celdas[21][22].vivas = true;
+	};
+
+
+	var contadorPasos = 0; //Declaramos la variable contadorPasos para llevar la cuenta del número de pasos que lleva vivo el mundo
+
+	//Clase para limpiar el mundo
+	juegoDeLaVida.limpiar = function (claseMundo) {
+
+	//Cuando limpiamos el mundo reiniciamos el contadorPasos y lo mostramos a 0
+	contadorPasos = 0;
+	contextoTexto.clearRect(0,0,800,100);
+	var texto = "Simulación en marcha: Paso " + contadorPasos;
+	contextoTexto.strokeText(texto,20,40);
+
+	//Limpiamos el mundo matando todas las células
+		for (var i = 0; i < claseMundo.celdas.length; i++) {
+			for (var j = 0; j < claseMundo.celdas.length; j++) {
+			claseMundo.celdas[i][j].vivas = false;
+			}	
+		}
+	};
+
+	//Clase escena
+	juegoDeLaVida.claseEscena = function (claseMundo, escena) {
+		var claseEscenaId, actualizarEscena, juego;
+	
+		for (var i = 0; i < escena.length; i++) {
+			escena[i].setup(claseMundo);
+		}
+	
+		actualizarEscena = function () {
+			for (var i = 0; i < escena.length; i++) {
+				escena[i].actualizar();	
+			}
+		};
+	
+		juego = {
+			velocidad : 175,
+		
+			play : function () {
+				claseEscenaId = window.setInterval(juego.paso, juego.velocidad);	 
+			},
+		
+			on : function () {
+				actualizarEscena();
+			},
+		
+			paso : function () {
+				claseMundo.avance();
+				actualizarEscena();
+				juegoDeLaVida.contarPasos();
+			},
+		
+			parar : function () {
+				if (claseEscenaId) {
+					window.clearInterval(claseEscenaId);
+				}
+			}
+		};
+	
+		return juego;
+	
+	};
+
+	//Mostramos por defecto que el número de pasos del mundo es 0
+	var texto = "Simulación en marcha: Paso " + contadorPasos;
+	contextoTexto.strokeText(texto,10,50);
+
+	//Por cada paso que avanzamos en el mundo lo sumamos al contador
+	juegoDeLaVida.contarPasos = function(){
+		contextoTexto.clearRect(0,0,200,100);
+		contadorPasos = contadorPasos + 1;
+		var texto = "Simulación en marcha: Paso " + contadorPasos;
+		contextoTexto.strokeText(texto,10,50);
+	};
+	
+	//clase para la interacción con la pantalla
+	juegoDeLaVida.interaccionPantalla = function () {
+		var claseMundo, aux, puntos, colocar, pantalla, punto;
+	
+		colocar = function (i, j) {
+			punto = puntos[j + i * claseMundo.celdas.length];
+			if(claseMundo.celdas[i][j].vivas){
+				punto.className = 'cell vivas'
+			} else {
+				punto.className = 'cell muertas'
+			}
+		};
+	
+		pantalla = {
+			setup : function (claseMundo1, elementId) {
+				var valorAux;
+				claseMundo = claseMundo1;
+				
+				if (elementId === undefined){
+					valorAux = 'Renderizado';
+				} else{
+					valorAux = elementId;
+				}
+				aux = document.getElementById(valorAux);
+			
+				for (var i = 0; i < claseMundo.celdas.length; i++) {
+					for (var j = 0; j < claseMundo.celdas[i].length; j++) {
+						punto = document.createElement('a');
+						punto.addEventListener('click', pantalla.cerca(i, j), false);
+						aux.appendChild(punto);
+						punto = null;
+					}
+					aux.appendChild(document.createElement('br'));
+				}
+			
+				puntos = aux.getElementsByTagName('a');
+			},
+		
+			actualizar : function () {
+				for (var i = 0; i < claseMundo.celdas.length; i++) {
+					for (var j = 0; j < claseMundo.celdas[i].length; j++) {
+						colocar(i, j);
+					}
+				}
+			},
+		
+			cerca : function(x, y) {
+				return function() { claseMundo.cerca(x, y); pantalla.actualizar(); };
+			}
+		};
+
+		return pantalla;
+	};
+		</script>
+		
+</div>
+</body>
+</html>
